@@ -1,0 +1,67 @@
+[package]
+name = "tier-forge"
+version = "0.1.0"
+description = "AI-assisted tier list studio with clean client-area recording"
+authors = ["TierForge"]
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "tier_forge_lib"
+# Desktop builds only need the rlib. Add "staticlib" and "cdylib" back if you
+# target mobile (Tauri's mobile entry point uses those crate types).
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tokio = { version = "1", features = ["sync", "time", "rt-multi-thread", "macros", "fs"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+  "stream",
+  "gzip"
+] }
+futures = "0.3"
+async-trait = "0.1"
+
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+sha2 = "0.10"
+hex = "0.4"
+bytes = "1"
+image = { version = "0.25", default-features = false, features = [
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "bmp"
+] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["clock"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-capture = "2.0.1"
+raw-window-handle = "0.6"
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
