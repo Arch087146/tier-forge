@@ -9,6 +9,20 @@ taskbar, no recording HUD.
 
 ---
 
+## Download
+
+Windows 10/11 x64 builds are available on the
+[Releases page](https://github.com/Arch087146/tier-forge/releases):
+
+- `TierForge_*_x64-setup.exe` — NSIS installer (recommended)
+- `TierForge_*_x64_en-US.msi` — MSI installer
+- `TierForge_*_x64-portable.zip` — portable build
+
+See the [code signing policy](CODE_SIGNING.md) for signing status and
+verification steps.
+
+---
+
 ## Screenshots
 
 Screenshots use a demo board with inline SVG tiles so the repository stays
@@ -457,6 +471,20 @@ shows the upstream message. Try a more specific prompt, or switch providers.
   Images live on disk; the persisted state stores only URLs and metadata.
 
 ---
+
+## Code signing policy
+
+**Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).**
+
+- Committers and reviewers: [Adam Emara (@Arch087146)](https://github.com/Arch087146)
+- Approvers: [Adam Emara (@Arch087146)](https://github.com/Arch087146)
+- Privacy policy: [PRIVACY.md](PRIVACY.md)
+
+Only artifacts built by the public
+[release workflow](.github/workflows/release.yml) from this repository are
+submitted for signing. The signed assets are `TierForge.exe`, the NSIS setup
+executable, and the MSI installer. See [CODE_SIGNING.md](CODE_SIGNING.md) for
+the full policy and verification steps.
 
 ## License
 
