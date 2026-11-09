@@ -182,7 +182,13 @@ pub async fn populate(
             }
 
             let image = tokio::select! {
-                image = images::resolve(&http, &cache_dir, &seed.search_query, &chain) => image,
+                image = images::resolve(
+                    &http,
+                    &cache_dir,
+                    &seed.search_query,
+                    Some(&seed.name),
+                    &chain,
+                ) => image,
                 _ = token.cancelled() => return Err(AppError::Cancelled),
             };
 

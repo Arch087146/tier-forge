@@ -13,15 +13,55 @@ pub async fn generate(
     provider: LlmProvider,
     model: Option<&str>,
 ) -> Result<Vec<SeedItem>, AppError> {
+    let max_tokens = max_output_tokens(count);
+
     match provider {
-        LlmProvider::OpenAi => openai(client, prompt, count, model.unwrap_or("gpt-4.1-mini")).await,
+        LlmProvider::OpenAi => {
+            openai(
+                client,
+                prompt,
+                count,
+                model.unwrap_or("gpt-4.1-mini"),
+                max_tokens,
+            )
+            .await
+        }
         LlmProvider::Gemini => {
-            gemini(client, prompt, count, model.unwrap_or("gemini-2.5-flash")).await
+            gemini(
+                client,
+                prompt,
+                count,
+                model.unwrap_or("gemini-2.5-flash"),
+                max_tokens,
+            )
+            .await
         }
         LlmProvider::OpenRouter => {
-            openrouter(client, prompt, count, model.unwrap_or("openai/gpt-4.1-mini")).await
+            openrouter(
+                client,
+                prompt,
+                count,
+                model.unwrap_or("openai/gpt-4.1-mini"),
+                max_tokens,
+            )
+            .await
         }
     }
+}
+
+/// Bound the completion so providers do not reserve the model's maximum output
+/// against the account balance. OpenRouter in particular rejects a request with
+/// HTTP 402 when the *reserved* tokens exceed the remaining credits, even if the
+/// actual completion would be tiny.
+fn max_output_tokens(count: usize) -> u32 {
+    let per_item = 140_u32;
+    let base = 512_u32;
+    count
+        .try_into()
+        .unwrap_or(u32::MAX)
+        .saturating_mul(per_item)
+        .saturating_add(base)
+        .clamp(1_200, 8_192)
 }
 
 async fn openai(
@@ -29,12 +69,14 @@ async fn openai(
     prompt: &str,
     count: usize,
     model: &str,
+    max_tokens: u32,
 ) -> Result<Vec<SeedItem>, AppError> {
     let key = get_api_key("openai").await?;
 
     let body = json!({
         "model": model,
         "temperature": 0.7,
+        "max_completion_tokens": max_tokens,
         "messages": [
             { "role": "system", "content": system_prompt(count) },
             {
@@ -72,6 +114,7 @@ async fn gemini(
     prompt: &str,
     count: usize,
     model: &str,
+    max_tokens: u32,
 ) -> Result<Vec<SeedItem>, AppError> {
     let key = get_api_key("gemini").await?;
     let url =
@@ -91,6 +134,7 @@ async fn gemini(
         }],
         "generationConfig": {
             "temperature": 0.7,
+            "maxOutputTokens": max_tokens,
             "responseMimeType": "application/json",
             "responseSchema": gemini_schema()
         }
@@ -111,6 +155,7 @@ async fn openrouter(
     prompt: &str,
     count: usize,
     model: &str,
+    max_tokens: u32,
 ) -> Result<Vec<SeedItem>, AppError> {
     let key = get_api_key("openrouter").await?;
     let system = format!(
@@ -124,6 +169,7 @@ async fn openrouter(
     let body = json!({
         "model": model,
         "temperature": 0.7,
+        "max_tokens": max_tokens,
         "messages": [
             { "role": "system", "content": system },
             {
@@ -263,11 +309,21 @@ async fn send_with_retry(request: reqwest::RequestBuilder) -> Result<Value, AppE
             continue;
         }
 
+        let hint = match status.as_u16() {
+            401 => " Check that the API key in Settings is correct and active.",
+            402 => " The provider account is out of credits. Add credits, or choose a cheaper model / fewer items.",
+            403 => " The provider denied access to this key or model.",
+            404 => " The selected model was not found. Check the model name.",
+            429 => " Rate limited. Wait a moment and try again.",
+            _ => "",
+        };
+
         return Err(AppError::Upstream(format!(
-            "{} {}: {}",
+            "{} {}: {}{}",
             status.as_u16(),
             status.canonical_reason().unwrap_or("error"),
-            truncate(&body, 400)
+            truncate(&body, 400),
+            hint
         )));
     }
 

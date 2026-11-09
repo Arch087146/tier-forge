@@ -61,25 +61,33 @@ impl ImageProvider for Openverse {
         let mut output = Vec::new();
 
         for result in value["results"].as_array().into_iter().flatten() {
-            let Some(url) = result["url"]
+            let page_url = result["foreign_landing_url"].as_str().map(str::to_string);
+            let author = result["creator"].as_str().map(str::to_string);
+            let license = result["license"]
                 .as_str()
-                .or_else(|| result["thumbnail"].as_str())
-            else {
-                continue;
-            };
-            if !is_http(url) {
-                continue;
-            }
+                .map(|license| license.to_uppercase());
 
-            output.push(ImageCandidate {
-                url: url.to_string(),
-                page_url: result["foreign_landing_url"].as_str().map(str::to_string),
-                author: result["creator"].as_str().map(str::to_string),
-                license: result["license"]
-                    .as_str()
-                    .map(|license| license.to_uppercase()),
-                provider: "openverse".into(),
-            });
+            // Try the original first for quality, then Openverse's own
+            // thumbnail endpoint. Some originals are too large, hotlink-blocked,
+            // or in a format the decoder cannot read; the proxied thumbnail is a
+            // reliable fallback.
+            for url in [result["url"].as_str(), result["thumbnail"].as_str()]
+                .into_iter()
+                .flatten()
+            {
+                if !is_http(url) || output.iter().any(|candidate: &ImageCandidate| candidate.url == url)
+                {
+                    continue;
+                }
+
+                output.push(ImageCandidate {
+                    url: url.to_string(),
+                    page_url: page_url.clone(),
+                    author: author.clone(),
+                    license: license.clone(),
+                    provider: "openverse".into(),
+                });
+            }
         }
 
         Ok(output)
@@ -170,14 +178,17 @@ impl ImageProvider for Wikimedia {
         query: &str,
         limit: usize,
     ) -> Result<Vec<ImageCandidate>, AppError> {
-        let gsrlimit = limit.to_string();
+        // `filetype:bitmap` keeps Commons from returning magazine PDFs and SVG
+        // logos, which cannot be cached as photos.
+        let search = format!("{query} filetype:bitmap");
+        let gsrlimit = limit.max(6).to_string();
         let response = http
             .get("https://commons.wikimedia.org/w/api.php")
             .query(&[
                 ("action", "query"),
                 ("format", "json"),
                 ("generator", "search"),
-                ("gsrsearch", query),
+                ("gsrsearch", search.as_str()),
                 ("gsrnamespace", "6"),
                 ("gsrlimit", gsrlimit.as_str()),
                 ("prop", "imageinfo"),

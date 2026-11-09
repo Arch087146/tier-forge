@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { cancelPopulate, isTauri, populateBoard } from "../lib/tauri";
-import type {
-  AiProgress,
-  GenerateRequest,
-  ImageProviderKind,
-  LlmProvider,
-  PopulateResult
-} from "../types";
+import {
+  DEFAULT_MODELS,
+  IMAGE_PROVIDERS,
+  LLM_PROVIDERS,
+  useAiPrefs
+} from "../store/aiPrefs";
+import type { AiProgress, GenerateRequest, PopulateResult } from "../types";
 
 interface AiDialogProps {
   onClose: () => void;
@@ -22,14 +22,22 @@ const PHASE_LABEL: Record<string, string> = {
 
 export function AiDialog({ onClose, onDone }: AiDialogProps) {
   const [prompt, setPrompt] = useState("");
-  const [count, setCount] = useState(24);
-  const [provider, setProvider] = useState<LlmProvider>("openai");
-  const [model, setModel] = useState("");
-  const [imageProvider, setImageProvider] = useState<ImageProviderKind>("auto");
-  const [safeSearch, setSafeSearch] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<AiProgress | null>(null);
+
+  // These choices are persisted, so the dialog reopens with the provider and
+  // model that were used last instead of resetting to the defaults.
+  const count = useAiPrefs((state) => state.count);
+  const setCount = useAiPrefs((state) => state.setCount);
+  const provider = useAiPrefs((state) => state.provider);
+  const setProvider = useAiPrefs((state) => state.setProvider);
+  const model = useAiPrefs((state) => state.models[state.provider]);
+  const setModel = useAiPrefs((state) => state.setModel);
+  const imageProvider = useAiPrefs((state) => state.imageProvider);
+  const setImageProvider = useAiPrefs((state) => state.setImageProvider);
+  const safeSearch = useAiPrefs((state) => state.safeSearch);
+  const setSafeSearch = useAiPrefs((state) => state.setSafeSearch);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -158,12 +166,16 @@ export function AiDialog({ onClose, onDone }: AiDialogProps) {
             <span>LLM</span>
             <select
               value={provider}
-              onChange={(event) => setProvider(event.target.value as LlmProvider)}
+              onChange={(event) =>
+                setProvider(event.target.value as typeof provider)
+              }
               disabled={busy}
             >
-              <option value="openai">OpenAI</option>
-              <option value="gemini">Gemini</option>
-              <option value="openrouter">OpenRouter</option>
+              {LLM_PROVIDERS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -172,31 +184,31 @@ export function AiDialog({ onClose, onDone }: AiDialogProps) {
             <select
               value={imageProvider}
               onChange={(event) =>
-                setImageProvider(event.target.value as ImageProviderKind)
+                setImageProvider(event.target.value as typeof imageProvider)
               }
               disabled={busy}
             >
-              <option value="auto">Auto (best available)</option>
-              <option value="openverse">Openverse</option>
-              <option value="brave">Brave Images</option>
-              <option value="wikimedia">Wikimedia Commons</option>
+              {IMAGE_PROVIDERS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
             </select>
           </label>
         </div>
 
-        {provider === "openrouter" ? (
-          <label className="field">
-            <span>OpenRouter model</span>
-            <input
-              type="text"
-              value={model}
-              placeholder="openai/gpt-4.1-mini"
-              spellCheck={false}
-              onChange={(event) => setModel(event.target.value)}
-              disabled={busy}
-            />
-          </label>
-        ) : null}
+        <label className="field">
+          <span>Model</span>
+          <input
+            type="text"
+            value={model}
+            placeholder={DEFAULT_MODELS[provider]}
+            title={`Leave blank to use ${DEFAULT_MODELS[provider]}`}
+            spellCheck={false}
+            onChange={(event) => setModel(provider, event.target.value)}
+            disabled={busy}
+          />
+        </label>
 
         <label className="checkbox">
           <input

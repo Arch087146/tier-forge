@@ -58,6 +58,7 @@ pub async fn resolve(
     http: &reqwest::Client,
     cache_dir: &Path,
     query: &str,
+    fallback_query: Option<&str>,
     chain: &[Arc<dyn providers::ImageProvider>],
 ) -> Option<CachedImage> {
     let query = query.trim();
@@ -65,6 +66,39 @@ pub async fn resolve(
         return None;
     }
 
+    if let Some(image) = resolve_with(http, cache_dir, query, chain).await {
+        return Some(image);
+    }
+
+    // The model's `search_query` is descriptive, which suits Openverse, while
+    // Wikimedia's search does best with a bare entity name. Retry the name on
+    // Wikimedia only, so a throttled Openverse request does not cost another
+    // Openverse call.
+    let fallback = fallback_query
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != query);
+
+    if let Some(fallback) = fallback {
+        let wikimedia: Vec<Arc<dyn providers::ImageProvider>> = chain
+            .iter()
+            .filter(|provider| provider.name() == "wikimedia")
+            .cloned()
+            .collect();
+
+        if !wikimedia.is_empty() {
+            return resolve_with(http, cache_dir, fallback, &wikimedia).await;
+        }
+    }
+
+    None
+}
+
+async fn resolve_with(
+    http: &reqwest::Client,
+    cache_dir: &Path,
+    query: &str,
+    chain: &[Arc<dyn providers::ImageProvider>],
+) -> Option<CachedImage> {
     for provider in chain {
         match provider.search(http, query, 4).await {
             Ok(candidates) => {

@@ -87,12 +87,12 @@ fn to_cached(
 }
 
 async fn download_limited(http: &reqwest::Client, url: &str) -> Result<Bytes, AppError> {
+    // Ask for anything image-shaped. Listing specific types (especially avif,
+    // which this build cannot decode) makes some servers answer 406, and
+    // Openverse's thumbnail endpoint only serves JPEG.
     let response = http
         .get(url)
-        .header(
-            reqwest::header::ACCEPT,
-            "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
-        )
+        .header(reqwest::header::ACCEPT, "image/*")
         .send()
         .await?;
 
