@@ -119,6 +119,9 @@ jobs:
 
           New-Item -ItemType Directory -Force portable\TierForge | Out-Null
           Copy-Item src-tauri\target\release\tier-forge.exe portable\TierForge\TierForge.exe
+          # The Windows build links WebView2Loader dynamically; without this DLL
+          # the portable exe exits with 0xC0000135 on a clean machine.
+          Copy-Item src-tauri\target\release\WebView2Loader.dll portable\TierForge\WebView2Loader.dll
           Copy-Item LICENSE portable\TierForge\LICENSE
           Compress-Archive -Path portable\TierForge -DestinationPath "TierForge_${version}_x64-portable.zip" -CompressionLevel Optimal
 
